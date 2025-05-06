@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>A Banana Saltitante</title>
+    <link rel="icon" type="image/png" href="images/favicon.png">
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+            background-color: #181c22;
+        }
+        body {
+            background-color: #181c22;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1200" height="600"></canvas>
+
+    <!-- Elementos de áudio -->
+    <audio id="walkSound" preload="auto">
+        <source src="sons/andando.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="jumpSound" preload="auto">
+        <source src="sons/pulo.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="quakeSound" preload="auto">
+        <source src="sons/terremoto.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="desmontagemSound" preload="auto">
+        <source src="sons/desmontagem.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="leiteSound" preload="auto">
+        <source src="sons/leite.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="booSound" preload="auto">
+        <source src="sons/boo.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="golpeSound1" preload="auto">
+        <source src="sons/golpe.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="golpeSound2" preload="auto">
+        <source src="sons/golpe.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="diamantesSound" preload="auto">
+        <source src="sons/diamantes.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="dronesSound" preload="auto" loop>
+        <source src="sons/drones.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="crescendoSound" preload="auto">
+        <source src="sons/crescendo.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="esguicharSound" preload="auto" loop>
+        <source src="sons/esguichar.mp3" type="audio/mpeg">
+    </audio>
+    <!-- Fundo musical com double buffering -->
+    <audio id="bgm1" preload="auto" loop>
+        <source src="sons/caverna.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgm2" preload="auto" loop>
+        <source src="sons/caverna.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Sons
+        const walkSound = document.getElementById('walkSound');
+        const jumpSound = document.getElementById('jumpSound');
+        const quakeSound = document.getElementById('quakeSound');
+        const desmontagemSound = document.getElementById('desmontagemSound');
+        const leiteSound = document.getElementById('leiteSound');
+        const booSound = document.getElementById('booSound');
+        const golpeSound1 = document.getElementById('golpeSound1');
+        const golpeSound2 = document.getElementById('golpeSound2');
+        const diamantesSound = document.getElementById('diamantesSound');
+        const dronesSound = document.getElementById('dronesSound');
+        const crescendoSound = document.getElementById('crescendoSound');
+        const esguicharSound = document.getElementById('esguicharSound');
+        // Fundo musical com double buffering
+        const bgm1 = document.getElementById('bgm1');
+        const bgm2 = document.getElementById('bgm2');
+        let currentBgm = bgm1;
+        let nextBgm = bgm2;
+        let bgmSwitchTime = 0;
+
+        let quakeActive = false;
+        let quakeTime = 0;
+        const quakeDuration = 15;
+        const quakeIntensity = 10;
+
+        // Variável para controlar a repetição do som "andando"
+        let lastWalkSoundTime = 0;
+        const walkSoundInterval = 12; // Aproximadamente 200ms (60 FPS / 5 vezes por segundo ≈ 12 frames)
+
+        // Variáveis para controle do som "golpe"
+        let currentGolpeSound = golpeSound1;
+        let nextGolpeSound = golpeSound2;
+        let golpeSwitchTime = 0;
+
+        const idleSpriteSheet = new Image();
+        idleSpriteSheet.src = 'images/respirando.png'; 
+        const moveSpriteSheet = new Image();
+        moveSpriteSheet.src = 'images/lados.png';
+        const droneSpriteSheet = new Image();
+        droneSpriteSheet.src = 'images/drones.png';
+        const diamondBlueImage = new Image();
+        diamondBlueImage.src = 'images/diamante_azul.png';
+        const diamondYellowImage = new Image();
+        diamondYellowImage.src = 'images/diamante_amarelo.png';
+        const diamondRedImage = new Image();
+        diamondRedImage.src = 'images/diamante_vermelho.png';
+        const milkShotImage = new Image();
+        milkShotImage.src = 'images/leite_disparado.png';
+        const platformAImage = new Image();
+        platformAImage.src = 'images/plataforma_a.png';
+        const platformBImage = new Image();
+        platformBImage.src = 'images/plataforma_b.png';
+        const platformCImage = new Image();
+        platformCImage.src = 'images/plataforma_c.png';
+        const backgroundImage = new Image();
+        backgroundImage.src = 'images/background.png';
+        const titleScreenImage = new Image();
+        titleScreenImage.src = 'images/capa.png';
+
+        const player = {
+            x: 600,
+            y: 500,
+            width: 60,
+            height: 60,
+            speed: 5,
+            velocityY: 0,
+            jumping: false,
+            jumps: 0,
+            maxJumps: 1,
+            gravity: 0.5,
+            jumpStrength: -12,
+            bounceStrength: -8,
+            lives: 10,
+            doubleJumpEndTime: 0,
+            milkCollected: 0,
+            specialMilkCollected: 0,
+            rotation: 0,
+            rotationSpeed: 0.5,
+            vibrationTime: 0,
+            specialAttackReady: false,
+            specialAttackActive: false,
+            specialAttackStartTime: 0,
+            specialAttackDuration: 600,
+            nextSpecialAttackMilestone: 15,
+            growthActive: false,
+            growthEndTime: 0,
+            growthStartTime: 0,
+            growthAnimationDuration: 12,
+            baseWidth: 60,
+            baseHeight: 60,
+            facingRight: true,
+            animationFrame: 0,
+            animationSpeed: 0.5,
+            frameCount: 0
+        };
+
+        let tutorialShown = false;
+
+        const platforms = [
+            { x: 100, y: 400, width: 200, height: 40, speed: 1, direction: 1, minY: 300, maxY: 500, vibrationTime: 0, vibrationDuration: 10 },
+            { x: 500, y: 300, width: 200, height: 40, speed: 1.5, direction: -1, minY: 200, maxY: 400, vibrationTime: 0, vibrationDuration: 10 },
+            { x: 900, y: 200, width: 200, height: 40, speed: 2, direction: 1, minY: 100, maxY: 300, vibrationTime: 0, vibrationDuration: 10 }
+        ];
+
+        const milkDrops = [];
+        const numDrops = 5;
+
+        function createMilkDrop() {
+            return {
+                x: Math.random() * (canvas.width - 20) + 10,
+                y: Math.random() * (canvas.height - 100) + 50,
+                radius: 10,
+                baseY: 0,
+                floatSpeed: 0.02,
+                floatAmplitude: 10,
+                time: Math.random() * 100,
+                pulseTime: Math.random() * 100
+            };
+        }
+        for (let i = 0; i < numDrops; i++) {
+            milkDrops.push(createMilkDrop());
+        }
+
+        const drones = [
+            { x: -60, y: Math.random() * canvas.height, width: 60, height: 60, baseSpeed: 2, speed: 2, active: true, respawnTime: 0, tiltAngle: 0, animationFrame: 0, frameCount: 0 }
+        ];
+
+        function createDrone() {
+            const side = Math.floor(Math.random() * 3);
+            let x, y;
+            if (side === 0) { x = -60; y = Math.random() * canvas.height; }
+            else if (side === 1) { x = canvas.width; y = Math.random() * canvas.height; }
+            else { x = Math.random() * canvas.width; y = -60; }
+            const baseSpeed = 2;
+            const speed = (player.milkCollected >= 60) ? baseSpeed * 0.5 : baseSpeed;
+            return { x, y, width: 60, height: 60, baseSpeed, speed, active: true, respawnTime: 0, tiltAngle: 0, animationFrame: 0, frameCount: 0 };
+        }
+
+        const particles = [];
+        function createExplosion(x, y) {
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: x + 15,
+                    y: y + 15,
+                    radius: Math.random() * 3 + 1,
+                    speedX: (Math.random() - 0.5) * 6,
+                    speedY: (Math.random() - 0.5) * 6,
+                    life: 30,
+                    color: 'gray'
+                });
+            }
+        }
+
+        const sparkles = [];
+        function createSparkles(x, y, color = 'white') {
+            for (let i = 0; i < 8; i++) {
+                sparkles.push({
+                    x: x,
+                    y: y,
+                    radius: Math.random() * 2 + 1,
+                    speedX: (Math.random() - 0.5) * 2,
+                    speedY: -(Math.random() * 3 + 2),
+                    life: 20,
+                    color: color
+                });
+            }
+        }
+
+        const specialAttackBalls = [];
+        function createSpecialAttackBalls() {
+            const numBalls = 16;
+            for (let i = 0; i < numBalls; i++) {
+                const angle = (i / numBalls) * 2 * Math.PI;
+                const speed = 5;
+                specialAttackBalls.push({
+                    x: player.x + player.width / 2,
+                    y: player.y + player.height / 2,
+                    radius: 8,
+                    speedX: Math.cos(angle) * speed,
+                    speedY: Math.sin(angle) * speed,
+                    life: 60
+                });
+            }
+        }
+
+        let diamond = null;
+        function createDiamond() {
+            return {
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: Math.random() * (canvas.height - 100) + 50,
+                size: 40,
+                baseY: 0,
+                floatSpeed: 0.02,
+                floatAmplitude: 10,
+                time: Math.random() * 100,
+                spawnTime: time,
+                duration: 1800,
+                animationTime: 0,
+                animationDuration: 60
+            };
+        }
+
+        let yellowDiamond = null;
+        function createYellowDiamond() {
+            return {
+                x: Math.random() * (canvas.width - 40),
+                y: -40,
+                size: 40,
+                speedY: 3,
+                onGround: false,
+                spawnTime: time,
+                duration: 600
+            };
+        }
+
+        let extraLife = null;
+        function createExtraLife() {
+            return {
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: Math.random() * (canvas.height - 100) + 50,
+                size: 40,
+                speedX: (Math.random() - 0.5) * 2,
+                speedY: (Math.random() - 0.5) * 2,
+                baseY: 0,
+                floatSpeed: 0.02,
+                floatAmplitude: 10,
+                time: Math.random() * 100,
+                spawnTime: time,
+                duration: 600,
+                animationTime: 0,
+                animationDuration: 60
+            };
+        }
+
+        const keys = {
+            left: false,
+            right: false,
+            space: false,
+            pause: false,
+            ctrl: false
+        };
+
+        let gameOver = false;
+        let gameStarted = false;
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft': 
+                    keys.left = true; 
+                    player.facingRight = false;
+                    break;
+                case 'ArrowRight': 
+                    keys.right = true; 
+                    player.facingRight = true;
+                    break;
+                case ' ': 
+                    if (!keys.pause && !gameOver && gameStarted && player.jumps < player.maxJumps) {
+                        player.velocityY = player.jumpStrength;
+                        player.jumps += 1;
+                        player.jumping = true;
+                        if (!player.growthActive) { // Toca o som "pulo" apenas se não estiver grande
+                            jumpSound.currentTime = 0;
+                            jumpSound.play();
+                        }
+                    }
+                    break;
+                case 'p':
+                case 'P':
+                    if (!gameOver && gameStarted) {
+                        keys.pause = !keys.pause;
+                        if (!keys.pause) requestAnimationFrame(update);
+                    }
+                    break;
+                case 'Control': 
+                    if (!keys.pause && !gameOver && gameStarted && player.specialAttackReady && !player.specialAttackActive) {
+                        keys.ctrl = true;
+                        player.specialAttackActive = true;
+                        player.specialAttackStartTime = time;
+                        player.specialAttackReady = false;
+                    }
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft': 
+                    keys.left = false; 
+                    walkSound.pause(); // Pausa o som ao soltar a tecla
+                    walkSound.currentTime = 0;
+                    break;
+                case 'ArrowRight': 
+                    keys.right = false; 
+                    walkSound.pause(); // Pausa o som ao soltar a tecla
+                    walkSound.currentTime = 0;
+                    break;
+                case 'Control': keys.ctrl = false; break;
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            if (!gameStarted) {
+                gameStarted = true;
+                requestAnimationFrame(update);
+            } else if (gameOver) {
+                resetGame();
+                gameOver = false;
+                requestAnimationFrame(update);
+            }
+        });
+
+        function checkCollision(player, platform) {
+            return (player.x < platform.x + platform.width &&
+                    player.x + player.width > platform.x &&
+                    player.y + player.height > platform.y &&
+                    player.y + player.height < platform.y + platform.height + 5);
+        }
+
+        function checkMilkCollision(player, drop) {
+            const dx = (player.x + player.width / 2) - drop.x;
+            const dy = (player.y + player.height / 2) - drop.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < (player.width / 2 + drop.radius);
+        }
+
+        function checkDroneCollision(player, drone) {
+            return (player.x < drone.x + drone.width &&
+                    player.x + player.width > drone.x &&
+                    player.y + player.height > drone.y &&
+                    player.y + player.height < drone.y + drone.height + 5 &&
+                    player.velocityY > 0);
+        }
+
+        function checkDroneDamage(player, drone) {
+            return (player.x < drone.x + drone.width &&
+                    player.x + player.width > drone.x &&
+                    player.y < drone.y + drone.height &&
+                    player.y + player.height > drone.y);
+        }
+
+        function checkDroneDroneCollision(drone1, drone2) {
+            return (drone1.x < drone2.x + drone2.width &&
+                    drone1.x + drone1.width > drone2.x &&
+                    drone1.y < drone2.y + drone2.height &&
+                    drone1.y + drone1.height > drone2.y);
+        }
+
+        function checkDiamondCollision(player, diamond) {
+            return (player.x < diamond.x + diamond.size &&
+                    player.x + player.width > diamond.x &&
+                    player.y < diamond.y + diamond.size &&
+                    player.y + player.height > diamond.y);
+        }
+
+        function checkYellowDiamondCollision(player, yellowDiamond) {
+            return (player.x < yellowDiamond.x + yellowDiamond.size &&
+                    player.x + player.width > yellowDiamond.x &&
+                    player.y < yellowDiamond.y + yellowDiamond.size &&
+                    player.y + player.height > yellowDiamond.y);
+        }
+
+        function checkExtraLifeCollision(player, extraLife) {
+            return (player.x < extraLife.x + extraLife.size &&
+                    player.x + player.width > extraLife.x &&
+                    player.y < extraLife.y + extraLife.size &&
+                    player.y + player.height > extraLife.y);
+        }
+
+        function checkBallDroneCollision(ball, drone) {
+            return (ball.x - ball.radius < drone.x + drone.width &&
+                    ball.x + ball.radius > drone.x &&
+                    ball.y - ball.radius < drone.y + drone.height &&
+                    ball.y + ball.radius > drone.y);
+        }
+
+        function respawnDrone(drone) {
+            const side = Math.floor(Math.random() * 3);
+            if (side === 0) { drone.x = -60; drone.y = Math.random() * canvas.height; }
+            else if (side === 1) { drone.x = canvas.width; drone.y = Math.random() * canvas.height; }
+            else { drone.x = Math.random() * canvas.width; drone.y = -60; }
+            drone.active = true;
+            drone.respawnTime = 0;
+            drone.speed = (player.milkCollected >= 60) ? drone.baseSpeed * 0.5 : drone.baseSpeed;
+            drone.tiltAngle = 0;
+            drone.animationFrame = 0;
+            drone.frameCount = 0;
+        }
+
+        function resetGame() {
+            player.x = 600;
+            player.y = 500;
+            player.velocityY = 0;
+            player.jumping = false;
+            player.jumps = 0;
+            player.maxJumps = 1;
+            player.lives = 10;
+            player.doubleJumpEndTime = 0;
+            player.milkCollected = 0;
+            player.specialMilkCollected = 0;
+            player.rotation = 0;
+            player.vibrationTime = 0;
+            player.specialAttackReady = false;
+            player.specialAttackActive = false;
+            player.specialAttackStartTime = 0;
+            player.nextSpecialAttackMilestone = 15;
+            player.growthActive = false;
+            player.growthEndTime = 0;
+            player.growthStartTime = 0;
+            player.width = player.baseWidth;
+            player.height = player.baseHeight;
+            player.facingRight = true;
+            player.animationFrame = 0;
+            player.frameCount = 0;
+            drones.length = 1;
+            drones[0] = { x: -60, y: Math.random() * canvas.height, width: 60, height: 60, baseSpeed: 2, speed: 2, active: true, respawnTime: 0, tiltAngle: 0, animationFrame: 0, frameCount: 0 };
+            diamond = null;
+            yellowDiamond = null;
+            extraLife = null;
+            particles.length = 0;
+            sparkles.length = 0;
+            specialAttackBalls.length = 0;
+            time = 0;
+            lastDamageTime = 0;
+            nextDiamondSpawn = 0;
+            nextYellowDiamondSpawn = 3600;
+            nextLifeSpawn = 1800;
+            keys.left = false;
+            keys.right = false;
+            keys.space = false;
+            keys.pause = false;
+            keys.ctrl = false;
+            tutorialShown = false;
+            quakeActive = false;
+            quakeTime = 0;
+            lastWalkSoundTime = 0; // Reseta o tempo do som "andando"
+            platforms.forEach(platform => {
+                platform.vibrationTime = 0;
+            });
+            golpeSound1.pause();
+            golpeSound1.currentTime = 0;
+            golpeSound2.pause();
+            golpeSound2.currentTime = 0;
+            currentGolpeSound = golpeSound1;
+            nextGolpeSound = golpeSound2;
+            golpeSwitchTime = 0;
+            // Reseta o fundo musical
+            bgm1.pause();
+            bgm1.currentTime = 0;
+            bgm2.pause();
+            bgm2.currentTime = 0;
+            currentBgm = bgm1;
+            nextBgm = bgm2;
+            bgmSwitchTime = 0;
+        }
+
+        function getRubberBandSize(baseSize, animationTime, animationDuration) {
+            if (animationTime >= animationDuration) return baseSize;
+            const progress = animationTime / animationDuration;
+            const amplitude = 20 * (1 - progress);
+            const frequency = 5;
+            const oscillation = Math.sin(progress * Math.PI * frequency) * amplitude;
+            return baseSize + oscillation;
+        }
+
+        let time = 0;
+        let lastDamageTime = 0;
+        let nextDiamondSpawn = 0;
+        let nextYellowDiamondSpawn = 3600;
+        let nextLifeSpawn = 1800;
+
+        function update() {
+            if (!gameStarted) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(titleScreenImage, 0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#E8C605';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Clique para iniciar', canvas.width / 2, canvas.height / 2 + 50);
+                ctx.textAlign = 'left';
+                return;
+            }
+
+            // Controle do fundo musical
+            if (gameStarted && currentBgm.paused) {
+                currentBgm.currentTime = 0;
+                currentBgm.play();
+                bgmSwitchTime = time + Math.floor(currentBgm.duration * 60 * 0.95); // Alternar a 95% da duração
+            }
+            if (time >= bgmSwitchTime && nextBgm.paused) {
+                nextBgm.currentTime = 0;
+                nextBgm.play();
+                let temp = currentBgm;
+                currentBgm = nextBgm;
+                nextBgm = temp;
+                bgmSwitchTime = time + Math.floor(currentBgm.duration * 60 * 0.95);
+            }
+
+            if (keys.pause) {
+                // Pausa todos os sons
+                walkSound.pause();
+                jumpSound.pause();
+                quakeSound.pause();
+                desmontagemSound.pause();
+                leiteSound.pause();
+                booSound.pause();
+                golpeSound1.pause();
+                golpeSound2.pause();
+                diamantesSound.pause();
+                dronesSound.pause();
+                crescendoSound.pause();
+                esguicharSound.pause();
+                bgm1.pause(); // Pausa o fundo musical
+                bgm2.pause();
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Pausado', canvas.width / 2, canvas.height / 2);
+                ctx.textAlign = 'left';
+                return;
+            } else if (!keys.pause && (bgm1.paused || bgm2.paused)) {
+                // Retoma o fundo musical ao despausar
+                if (currentBgm.paused) {
+                    currentBgm.play();
+                }
+            }
+
+            if (gameOver) {
+                // Pausa o fundo musical no game over
+                bgm1.pause();
+                bgm2.pause();
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'red';
+                ctx.font = '60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.fillText(`Gotas de leite coletadas: ${player.milkCollected}`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.font = '20px Arial';
+                ctx.fillText('Clique para reiniciar', canvas.width / 2, canvas.height / 2 + 60);
+                ctx.textAlign = 'left';
+                return;
+            }
+
+            time += 1;
+
+            // Controle do som "golpe" com dois buffers
+            if (player.specialAttackActive) {
+                if (currentGolpeSound.paused) {
+                    currentGolpeSound.currentTime = 0;
+                    currentGolpeSound.play();
+                    golpeSwitchTime = time + Math.floor(currentGolpeSound.duration * 60 * 0.9); // Alternar antes do fim
+                }
+                if (time >= golpeSwitchTime && nextGolpeSound.paused) {
+                    nextGolpeSound.currentTime = 0;
+                    nextGolpeSound.play();
+                    let temp = currentGolpeSound;
+                    currentGolpeSound = nextGolpeSound;
+                    nextGolpeSound = temp;
+                    golpeSwitchTime = time + Math.floor(currentGolpeSound.duration * 60 * 0.9);
+                }
+            } else {
+                if (!currentGolpeSound.paused) {
+                    currentGolpeSound.pause();
+                    currentGolpeSound.currentTime = 0;
+                }
+                if (!nextGolpeSound.paused) {
+                    nextGolpeSound.pause();
+                    nextGolpeSound.currentTime = 0;
+                }
+            }
+
+            // Som "esguichar" quando a barra do golpe especial está cheia
+            if (!player.specialAttackActive && player.specialMilkCollected >= player.nextSpecialAttackMilestone && esguicharSound.paused) {
+                esguicharSound.currentTime = 0;
+                esguicharSound.play();
+            } else if ((player.specialAttackActive || player.specialMilkCollected < player.nextSpecialAttackMilestone) && !esguicharSound.paused) {
+                esguicharSound.pause();
+                esguicharSound.currentTime = 0;
+            }
+
+            if (keys.left && player.x > 0) player.x -= player.speed;
+            if (keys.right && player.x < canvas.width - player.width) player.x += player.speed;
+
+            // Controle do som "andando" para repetir 5 vezes por segundo
+            if ((keys.left || keys.right) && !player.jumping && time - lastWalkSoundTime >= walkSoundInterval) {
+                walkSound.currentTime = 0; // Reinicia o som
+                walkSound.play();
+                lastWalkSoundTime = time; // Atualiza o tempo da última reprodução
+            }
+
+            player.velocityY += player.gravity;
+            player.y += player.velocityY;
+
+            if (player.jumping) {
+                player.rotation += player.rotationSpeed;
+            }
+
+            if (player.y > canvas.height - player.height - 20) {
+                player.y = canvas.height - player.height - 20;
+                player.velocityY = 0;
+                if (player.jumping && player.growthActive && !quakeActive) {
+                    quakeActive = true;
+                    quakeTime = quakeDuration;
+                    quakeSound.currentTime = 0; // Toca o som "terremoto" ao pousar grande
+                    quakeSound.play();
+                }
+                player.jumping = false;
+                player.jumps = 0;
+                player.rotation = 0;
+            }
+
+            platforms.forEach(platform => {
+                platform.y += platform.speed * platform.direction;
+                if (platform.y < platform.minY || platform.y > platform.maxY) {
+                    platform.direction *= -1;
+                }
+                if (checkCollision(player, platform) && player.velocityY > 0) {
+                    player.y = platform.y - player.height;
+                    player.velocityY = 0;
+                    if (player.jumping && player.growthActive) {
+                        platform.vibrationTime = platform.vibrationDuration;
+                        quakeSound.currentTime = 0; // Toca o som "terremoto" ao pousar grande em plataforma
+                        quakeSound.play();
+                    }
+                    player.jumping = false;
+                    player.jumps = 0;
+                    player.rotation = 0;
+                }
+            });
+
+            milkDrops.forEach((drop, index) => {
+                if (!drop.baseY) drop.baseY = drop.y;
+                drop.y = drop.baseY + Math.sin(time * drop.floatSpeed + drop.time) * drop.floatAmplitude;
+                if (checkMilkCollision(player, drop)) {
+                    player.milkCollected += 1;
+                    if (!player.specialAttackActive) {
+                        player.specialMilkCollected += 1;
+                    }
+                    createSparkles(drop.x, drop.y);
+                    leiteSound.currentTime = 0; // Toca o som "leite" ao coletar uma gota
+                    leiteSound.play();
+                    milkDrops[index] = createMilkDrop();
+
+                    if (!player.specialAttackActive && player.specialMilkCollected >= player.nextSpecialAttackMilestone) {
+                        player.specialAttackReady = true;
+                    }
+
+                    const expectedDrones = Math.floor(player.milkCollected / 30) + 1;
+                    while (drones.length < expectedDrones) {
+                        drones.push(createDrone());
+                    }
+                }
+            });
+
+            drones.forEach(drone => {
+                if (drone.active) {
+                    drone.speed = (player.milkCollected >= 60) ? drone.baseSpeed * 0.5 : drone.baseSpeed;
+                    drone.tiltAngle = Math.sin(time * 0.05) * 0.2;
+
+                    drone.frameCount += 0.2;
+                    if (drone.frameCount >= 1) {
+                        drone.animationFrame = (drone.animationFrame + 1) % 2;
+                        drone.frameCount = 0;
+                    }
+                }
+            });
+
+            if (player.specialAttackActive) {
+                if (time % 10 === 0) {
+                    createSpecialAttackBalls();
+                }
+            }
+
+            for (let i = specialAttackBalls.length - 1; i >= 0; i--) {
+                const ball = specialAttackBalls[i];
+                ball.x += ball.speedX;
+                ball.y += ball.speedY;
+                ball.life -= 1;
+
+                if (ball.life <= 0 || ball.x < 0 || ball.x > canvas.width || ball.y < 0 || ball.y > canvas.height) {
+                    specialAttackBalls.splice(i, 1);
+                    continue;
+                }
+
+                for (let j = 0; j < drones.length; j++) {
+                    const drone = drones[j];
+                    if (drone.active && checkBallDroneCollision(ball, drone)) {
+                        createExplosion(drone.x, drone.y);
+                        drone.active = false;
+                        drone.respawnTime = time + 180;
+                        desmontagemSound.currentTime = 0; // Toca o som "desmontagem" ao destruir com ataque especial
+                        desmontagemSound.play();
+                        specialAttackBalls.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+
+            for (let i = 0; i < drones.length; i++) {
+                const drone = drones[i];
+                if (drone.active) {
+                    if (drone.x < player.x) drone.x += drone.speed;
+                    if (drone.x > player.x) drone.x -= drone.speed;
+                    if (drone.y < player.y) drone.y += drone.speed;
+                    if (drone.y > player.y) drone.y -= drone.speed;
+
+                    for (let j = 0; j < drones.length; j++) {
+                        if (i !== j) {
+                            const otherDrone = drones[j];
+                            if (otherDrone.active && checkDroneDroneCollision(drone, otherDrone)) {
+                                const dx = drone.x - otherDrone.x;
+                                const dy = drone.y - otherDrone.y;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                const overlap = (drone.width + otherDrone.width) / 2 - distance;
+                                if (distance > 0) {
+                                    const pushX = (dx / distance) * overlap * 0.5;
+                                    const pushY = (dy / distance) * overlap * 0.5;
+                                    drone.x += pushX;
+                                    drone.y += pushY;
+                                    otherDrone.x -= pushX;
+                                    otherDrone.y -= pushY;
+                                }
+                            }
+                        }
+                    }
+
+                    if (player.growthActive && checkDroneDamage(player, drone)) {
+                        createExplosion(drone.x, drone.y);
+                        drone.active = false;
+                        drone.respawnTime = time + 180;
+                        desmontagemSound.currentTime = 0; // Toca o som "desmontagem" ao eliminar drone (grande)
+                        desmontagemSound.play();
+                    }
+                    else if (checkDroneCollision(player, drone)) {
+                        createExplosion(drone.x, drone.y);
+                        drone.active = false;
+                        drone.respawnTime = time + 180;
+                        desmontagemSound.currentTime = 0; // Toca o som "desmontagem" ao eliminar drone (pulo)
+                        desmontagemSound.play();
+                        player.velocityY = player.bounceStrength;
+                    }
+                    else if (checkDroneDamage(player, drone) && time - lastDamageTime > 60) {
+                        player.lives -= 1;
+                        lastDamageTime = time;
+                        booSound.currentTime = 0; // Toca o som "boo" ao perder vida
+                        booSound.play();
+                        if (player.lives > 0) {
+                            player.vibrationTime = time + 30;
+                        } else {
+                            gameOver = true;
+                        }
+                    }
+                } else if (time >= drone.respawnTime && drone.respawnTime !== 0) {
+                    respawnDrone(drone);
+                }
+            }
+
+            // Som dos drones
+            const hasActiveDrones = drones.some(drone => drone.active);
+            if (hasActiveDrones && dronesSound.paused) {
+                dronesSound.currentTime = 0;
+                dronesSound.play();
+            } else if (!hasActiveDrones && !dronesSound.paused) {
+                dronesSound.pause();
+                dronesSound.currentTime = 0;
+            }
+
+            if (player.specialAttackActive && time - player.specialAttackStartTime >= player.specialAttackDuration) {
+                player.specialAttackActive = false;
+                player.specialMilkCollected = 0;
+                player.nextSpecialAttackMilestone += 15;
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.life -= 1;
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            for (let i = sparkles.length - 1; i >= 0; i--) {
+                const s = sparkles[i];
+                s.x += s.speedX;
+                s.y += s.speedY;
+                s.life -= 1;
+                if (s.life <= 0) {
+                    sparkles.splice(i, 1);
+                }
+            }
+
+            if (!diamond && time > nextDiamondSpawn && Math.random() < 0.005) {
+                diamond = createDiamond();
+            }
+            if (diamond) {
+                if (!diamond.baseY) diamond.baseY = diamond.y;
+                diamond.y = diamond.baseY + Math.sin(time * diamond.floatSpeed + diamond.time) * diamond.floatAmplitude;
+                diamond.animationTime += 1;
+
+                if (checkDiamondCollision(player, diamond)) {
+                    createSparkles(diamond.x + diamond.size / 2, diamond.y + diamond.size / 2, '#4040FF');
+                    diamantesSound.currentTime = 0;
+                    diamantesSound.play();
+                    diamond = null;
+                    player.maxJumps = 2;
+                    player.doubleJumpEndTime = time + 1800;
+                } else if (time - diamond.spawnTime >= diamond.duration) {
+                    diamond = null;
+                }
+            }
+
+            if (!yellowDiamond && time >= nextYellowDiamondSpawn) {
+                yellowDiamond = createYellowDiamond();
+                nextYellowDiamondSpawn = time + 3600 + Math.floor(Math.random() * 1800);
+            }
+            if (yellowDiamond) {
+                if (!yellowDiamond.onGround) {
+                    yellowDiamond.y += yellowDiamond.speedY;
+                    if (yellowDiamond.y >= canvas.height - yellowDiamond.size - 20) {
+                        yellowDiamond.y = canvas.height - yellowDiamond.size - 20;
+                        yellowDiamond.onGround = true;
+                    }
+                }
+
+                if (checkYellowDiamondCollision(player, yellowDiamond)) {
+                    createSparkles(yellowDiamond.x + yellowDiamond.size / 2, yellowDiamond.y + yellowDiamond.size / 2, '#FFFF00');
+                    diamantesSound.currentTime = 0;
+                    diamantesSound.play();
+                    yellowDiamond = null;
+                    player.growthActive = true;
+                    player.growthStartTime = time;
+                    player.growthEndTime = time + 900;
+                    crescendoSound.currentTime = 0;
+                    crescendoSound.play();
+                } else if (yellowDiamond.onGround && time - yellowDiamond.spawnTime >= yellowDiamond.duration) {
+                    yellowDiamond = null;
+                }
+            }
+
+            if (player.growthActive && time <= player.growthStartTime + player.growthAnimationDuration) {
+                const progress = (time - player.growthStartTime) / player.growthAnimationDuration;
+                player.width = player.baseWidth + (150 - player.baseWidth) * progress;
+                player.height = player.baseHeight + (150 - player.baseHeight) * progress;
+            } else if (player.growthActive) {
+                player.width = 150;
+                player.height = 150;
+            }
+
+            if (player.growthActive && time >= player.growthEndTime) {
+                player.growthActive = false;
+                player.width = player.baseWidth;
+                player.height = player.baseHeight;
+            }
+
+            if (!extraLife && time >= nextLifeSpawn) {
+                extraLife = createExtraLife();
+                nextLifeSpawn = time + 1500;
+            }
+            if (extraLife) {
+                extraLife.x += extraLife.speedX;
+                extraLife.y += extraLife.speedY;
+                if (!extraLife.baseY) extraLife.baseY = extraLife.y;
+                extraLife.y = extraLife.baseY + Math.sin(time * extraLife.floatSpeed + extraLife.time) * extraLife.floatAmplitude;
+                extraLife.animationTime += 1;
+
+                if (extraLife.x < 0 || extraLife.x > canvas.width - extraLife.size) extraLife.speedX *= -1;
+                if (extraLife.y < 0 || extraLife.y > canvas.height - extraLife.size) extraLife.speedY *= -1;
+
+                if (checkExtraLifeCollision(player, extraLife)) {
+                    createSparkles(extraLife.x + extraLife.size / 2, extraLife.y + extraLife.size / 2, '#FF4040');
+                    diamantesSound.currentTime = 0;
+                    diamantesSound.play();
+                    player.lives += 1;
+                    extraLife = null;
+                } else if (time - extraLife.spawnTime >= extraLife.duration) {
+                    extraLife = null;
+                }
+            }
+
+            if (player.maxJumps > 1 && time >= player.doubleJumpEndTime) {
+                player.maxJumps = 1;
+            }
+
+            if ((keys.left || keys.right) && !player.jumping) {
+                player.frameCount += player.animationSpeed;
+                if (player.frameCount >= 1) {
+                    player.animationFrame = (player.animationFrame + 1) % 8;
+                    player.frameCount = 0;
+                }
+            } else if (!keys.left && !keys.right && !player.jumping) {
+                player.frameCount += player.animationSpeed;
+                if (player.frameCount >= 1) {
+                    player.animationFrame = (player.animationFrame + 1) % 18;
+                    player.frameCount = 0;
+                }
+            } else {
+                player.animationFrame = 0;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (quakeActive) {
+                quakeTime -= 1;
+                if (quakeTime <= 0) {
+                    quakeActive = false;
+                }
+            }
+
+            let quakeOffsetX = 0;
+            let quakeOffsetY = 0;
+            if (quakeActive) {
+                quakeOffsetX = (Math.random() - 0.5) * quakeIntensity * (quakeTime / quakeDuration);
+                quakeOffsetY = (Math.random() - 0.5) * quakeIntensity * (quakeTime / quakeDuration);
+            }
+
+            ctx.drawImage(backgroundImage, quakeOffsetX, quakeOffsetY, canvas.width, canvas.height);
+
+            specialAttackBalls.forEach(ball => {
+                ctx.drawImage(milkShotImage, ball.x - ball.radius, ball.y - ball.radius, ball.radius * 2, ball.radius * 2);
+            });
+
+            ctx.save();
+            let drawX = player.x;
+            let drawY = player.y;
+            if (player.vibrationTime > time) {
+                drawX += (Math.random() - 0.5) * 10;
+                drawY += (Math.random() - 0.5) * 10;
+            }
+            ctx.translate(drawX + player.width / 2, drawY + player.height / 2);
+            ctx.rotate(player.rotation);
+
+            const frameWidth = 150;
+            const frameHeight = 150;
+            let spriteSheetToUse = idleSpriteSheet;
+            let sx = player.animationFrame * frameWidth;
+
+            if ((keys.left || keys.right) && !player.jumping) {
+                spriteSheetToUse = moveSpriteSheet;
+                if (!player.facingRight) {
+                    sx += 8 * frameWidth;
+                }
+            } else if (!player.jumping) {
+                spriteSheetToUse = idleSpriteSheet;
+                if (!player.facingRight) {
+                    sx += 18 * frameWidth;
+                }
+            } else {
+                spriteSheetToUse = idleSpriteSheet;
+                sx = 0;
+                if (!player.facingRight) {
+                    sx = 18 * frameWidth;
+                }
+            }
+
+            ctx.drawImage(spriteSheetToUse, sx, 0, frameWidth, frameHeight, -player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.restore();
+
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.closePath();
+            });
+
+            sparkles.forEach(s => {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fillStyle = s.color;
+                ctx.fill();
+                ctx.closePath();
+            });
+
+            platforms.forEach((platform, index) => {
+                if (platform.vibrationTime > 0) {
+                    platform.vibrationTime -= 1;
+                }
+
+                let vibeOffsetX = 0;
+                let vibeOffsetY = 0;
+                if (platform.vibrationTime > 0) {
+                    vibeOffsetX = (Math.random() - 0.5) * 5 * (platform.vibrationTime / platform.vibrationDuration);
+                    vibeOffsetY = (Math.random() - 0.5) * 5 * (platform.vibrationTime / platform.vibrationDuration);
+                }
+
+                if (index === 0) {
+                    ctx.drawImage(platformAImage, platform.x + vibeOffsetX, platform.y + vibeOffsetY, platform.width, platform.height);
+                } else if (index === 1) {
+                    ctx.drawImage(platformBImage, platform.x + vibeOffsetX, platform.y + vibeOffsetY, platform.width, platform.height);
+                } else if (index === 2) {
+                    ctx.drawImage(platformCImage, platform.x + vibeOffsetX, platform.y + vibeOffsetY, platform.width, platform.height);
+                }
+            });
+
+            milkDrops.forEach(drop => {
+                const pulseScale = 1 + Math.sin(time * 0.05 + drop.pulseTime) * 0.2;
+                const pulsedRadius = drop.radius * pulseScale;
+
+                ctx.beginPath();
+                ctx.arc(drop.x, drop.y, pulsedRadius, 0, Math.PI * 2);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.closePath();
+            });
+
+            drones.forEach(drone => {
+                if (drone.active) {
+                    ctx.save();
+                    ctx.translate(drone.x + drone.width / 2, drone.y + drone.height / 2);
+                    ctx.rotate(drone.tiltAngle);
+                    const droneFrameWidth = 150;
+                    const droneFrameHeight = 150;
+                    const sx = drone.animationFrame * droneFrameWidth;
+                    ctx.drawImage(droneSpriteSheet, sx, 0, droneFrameWidth, droneFrameHeight, -drone.width / 2, -drone.height / 2, drone.width, drone.height);
+                    ctx.restore();
+                }
+            });
+
+            if (diamond) {
+                const currentSize = getRubberBandSize(diamond.size, diamond.animationTime, diamond.animationDuration);
+                const offsetX = (diamond.size - currentSize) / 2;
+                const offsetY = (diamond.size - currentSize) / 2;
+                ctx.drawImage(diamondBlueImage, diamond.x + offsetX, diamond.y + offsetY, currentSize, currentSize);
+            }
+
+            if (yellowDiamond) {
+                ctx.drawImage(diamondYellowImage, yellowDiamond.x, yellowDiamond.y, yellowDiamond.size, yellowDiamond.size);
+            }
+
+            if (extraLife) {
+                const currentSize = getRubberBandSize(extraLife.size, extraLife.animationTime, extraLife.animationDuration);
+                const offsetX = (extraLife.size - currentSize) / 2;
+                const offsetY = (extraLife.size - currentSize) / 2;
+                ctx.drawImage(diamondRedImage, extraLife.x + offsetX, extraLife.y + offsetY, currentSize, currentSize);
+            }
+
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Vidas: ${player.lives}`, 10, 30);
+            ctx.font = '20px Arial Black';
+            ctx.fillText(`Leite coletado: ${player.milkCollected}`, 150, 30);
+
+            const specialBarX = 385;
+            const specialBarY = 15;
+            const specialBarWidth = 100;
+            const specialBarHeight = 20;
+            const radius = specialBarHeight / 2;
+
+            let pulseScale = 1;
+            if (!player.specialAttackActive && player.specialMilkCollected >= player.nextSpecialAttackMilestone) {
+                pulseScale = 1 + Math.sin(time * 0.1) * 0.1;
+            }
+
+            const pulsedWidth = specialBarWidth * pulseScale;
+            const pulsedHeight = specialBarHeight * pulseScale;
+            const pulsedX = specialBarX - (pulsedWidth - specialBarWidth) / 2;
+            const pulsedY = specialBarY - (pulsedHeight - specialBarHeight) / 2;
+            const pulsedRadius = radius * pulseScale;
+
+            ctx.fillStyle = 'gray';
+            ctx.beginPath();
+            ctx.roundRect(pulsedX, pulsedY, pulsedWidth, pulsedHeight, pulsedRadius);
+            ctx.fill();
+            ctx.closePath();
+
+            let fillWidth;
+            if (player.specialAttackActive) {
+                const elapsed = time - player.specialAttackStartTime;
+                const remainingTime = Math.max(player.specialAttackDuration - elapsed, 0);
+                const progress = remainingTime / player.specialAttackDuration;
+                fillWidth = progress * pulsedWidth;
+            } else {
+                const progress = Math.min(player.specialMilkCollected / player.nextSpecialAttackMilestone, 1);
+                fillWidth = progress * pulsedWidth;
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(pulsedX, pulsedY, pulsedWidth, pulsedHeight, pulsedRadius);
+            ctx.clip();
+            ctx.fillStyle = 'white';
+            ctx.fillRect(pulsedX, pulsedY, fillWidth, pulsedHeight);
+            ctx.restore();
+
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(pulsedX, pulsedY, pulsedWidth, pulsedHeight, pulsedRadius);
+            ctx.stroke();
+            ctx.closePath();
+
+            if (!tutorialShown && !player.specialAttackActive && player.specialMilkCollected >= player.nextSpecialAttackMilestone) {
+                ctx.font = '12px Arial';
+                ctx.fillStyle = `rgba(255, 255, 0, ${Math.abs(Math.sin(time * 0.1))})`;
+                ctx.fillText('PRESSIONE CTRL', specialBarX + specialBarWidth + 10, specialBarY + 15);
+                if (player.specialAttackActive) {
+                    tutorialShown = true;
+                }
+            }
+
+            const barWidth = 100;
+            const barHeight = 10;
+            const barX = canvas.width - barWidth - 10;
+            const barY = 20;
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = '20px Arial';
+            ctx.fillText('Salto duplo', barX - 110, 30);
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            if (player.maxJumps > 1) {
+                const timeLeft = player.doubleJumpEndTime - time;
+                const fillWidth = (timeLeft / 1800) * barWidth;
+                ctx.fillStyle = 'cyan';
+                ctx.fillRect(barX, barY, fillWidth, barHeight);
+            }
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+            const growthCircleX = barX - 140;
+            const growthCircleY = 25;
+            const growthCircleRadius = 10;
+            if (player.growthActive) {
+                const timeLeft = player.growthEndTime - time;
+                const progress = timeLeft / 900;
+                const endAngle = -Math.PI / 2 + (2 * Math.PI * progress);
+
+                ctx.beginPath();
+                ctx.arc(growthCircleX, growthCircleY, growthCircleRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = 'gray';
+                ctx.fill();
+                ctx.closePath();
+
+                ctx.beginPath();
+                ctx.moveTo(growthCircleX, growthCircleY);
+                ctx.arc(growthCircleX, growthCircleY, growthCircleRadius, -Math.PI / 2, endAngle, false);
+                ctx.lineTo(growthCircleX, growthCircleY);
+                ctx.fillStyle = 'yellow';
+                ctx.fill();
+                ctx.closePath();
+
+                ctx.beginPath();
+                ctx.arc(growthCircleX, growthCircleY, growthCircleRadius, 0, 2 * Math.PI);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.closePath();
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        let assetsLoaded = 0;
+        const totalAssets = 26; // 12 imagens + 14 sons (golpeSound1 e golpeSound2 são contados separadamente, mais bgm1 e bgm2)
+
+        function checkAssetsLoaded() {
+            assetsLoaded++;
+            if (assetsLoaded === totalAssets) {
+                update();
+            }
+        }
+
+        idleSpriteSheet.onload = checkAssetsLoaded;
+        moveSpriteSheet.onload = checkAssetsLoaded;
+        droneSpriteSheet.onload = checkAssetsLoaded;
+        diamondBlueImage.onload = checkAssetsLoaded;
+        diamondYellowImage.onload = checkAssetsLoaded;
+        diamondRedImage.onload = checkAssetsLoaded;
+        milkShotImage.onload = checkAssetsLoaded;
+        platformAImage.onload = checkAssetsLoaded;
+        platformBImage.onload = checkAssetsLoaded;
+        platformCImage.onload = checkAssetsLoaded;
+        backgroundImage.onload = checkAssetsLoaded;
+        titleScreenImage.onload = checkAssetsLoaded;
+
+        idleSpriteSheet.onerror = checkAssetsLoaded;
+        moveSpriteSheet.onerror = checkAssetsLoaded;
+        droneSpriteSheet.onerror = checkAssetsLoaded;
+        diamondBlueImage.onerror = checkAssetsLoaded;
+        diamondYellowImage.onerror = checkAssetsLoaded;
+        diamondRedImage.onerror = checkAssetsLoaded;
+        milkShotImage.onerror = checkAssetsLoaded;
+        platformAImage.onerror = checkAssetsLoaded;
+        platformBImage.onerror = checkAssetsLoaded;
+        platformCImage.onerror = checkAssetsLoaded;
+        backgroundImage.onerror = checkAssetsLoaded;
+        titleScreenImage.onerror = checkAssetsLoaded;
+
+        walkSound.onloadeddata = checkAssetsLoaded;
+        jumpSound.onloadeddata = checkAssetsLoaded;
+        quakeSound.onloadeddata = checkAssetsLoaded;
+        desmontagemSound.onloadeddata = checkAssetsLoaded;
+        leiteSound.onloadeddata = checkAssetsLoaded;
+        booSound.onloadeddata = checkAssetsLoaded;
+        golpeSound1.onloadeddata = checkAssetsLoaded;
+        golpeSound2.onloadeddata = checkAssetsLoaded;
+        diamantesSound.onloadeddata = checkAssetsLoaded;
+        dronesSound.onloadeddata = checkAssetsLoaded;
+        crescendoSound.onloadeddata = checkAssetsLoaded;
+        esguicharSound.onloadeddata = checkAssetsLoaded;
+        bgm1.onloadeddata = checkAssetsLoaded;
+        bgm2.onloadeddata = checkAssetsLoaded;
+
+        walkSound.onerror = checkAssetsLoaded;
+        jumpSound.onerror = checkAssetsLoaded;
+        quakeSound.onerror = checkAssetsLoaded;
+        desmontagemSound.onerror = checkAssetsLoaded;
+        leiteSound.onerror = checkAssetsLoaded;
+        booSound.onerror = checkAssetsLoaded;
+        golpeSound1.onerror = checkAssetsLoaded;
+        golpeSound2.onerror = checkAssetsLoaded;
+        diamantesSound.onerror = checkAssetsLoaded;
+        dronesSound.onerror = checkAssetsLoaded;
+        crescendoSound.onerror = checkAssetsLoaded;
+        esguicharSound.onerror = checkAssetsLoaded;
+        bgm1.onerror = checkAssetsLoaded;
+        bgm2.onerror = checkAssetsLoaded;
+    </script>
+</body>
+</html>
